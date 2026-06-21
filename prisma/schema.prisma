@@ -1,0 +1,105 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ── Customer ────────────────────────────────────────────────────────
+// Derived from CustomerData in AboutMe.md
+// Fields cover: core profile, financial indicators, product holdings,
+// scoring inputs, and RM contact tracking.
+
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?  @unique
+  phone     String?  @unique
+
+  // ── Financial Profile ─────────────────────────────────────────────
+  income          Float   // monthly income (₹)
+  creditScore     Int     @map("credit_score")
+  idleBalance     Float   @default(0) @map("idle_balance")
+  existingEmiRatio Float  @default(0) @map("existing_emi_ratio") // ratio 0-1
+
+  // ── Product Holdings ──────────────────────────────────────────────
+  // e.g. ["savings_account", "fd", "mutual_fund", "personal_loan"]
+  existingProducts String[] @map("existing_products")
+
+  // ── Demographics (flexible JSON blob) ─────────────────────────────
+  // age, gender, city, occupation, etc.
+  demographics Json? @default("{}")
+
+  // ── RM Contact Tracking ───────────────────────────────────────────
+  lastContactedAt DateTime? @map("last_contacted_at")
+
+  // ── Relations ─────────────────────────────────────────────────────
+  transactions Transaction[]
+
+  // ── Timestamps ────────────────────────────────────────────────────
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt       @map("updated_at")
+
+  @@map("customers")
+}
+
+// ── Transaction ─────────────────────────────────────────────────────
+// Represents entries in a customer's transaction_history[].
+// Used by the scoring logic (e.g. recentSalaryCredit check).
+
+model Transaction {
+  id         String   @id @default(cuid())
+
+  // ── Core Fields ───────────────────────────────────────────────────
+  type       String   // e.g. "salary_credit", "purchase", "emi", "transfer"
+  amount     Float
+  date       DateTime
+  description String?
+
+  // ── Relation ──────────────────────────────────────────────────────
+  customerId String   @map("customer_id")
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  // ── Timestamps ────────────────────────────────────────────────────
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([customerId, date])
+  @@map("transactions")
+}
+
+// ── Checkpoint ──────────────────────────────────────────────────────
+model Checkpoint {
+  threadId             String   @map("thread_id")
+  checkpointNs         String   @default("") @map("checkpoint_ns")
+  checkpointId         String   @map("checkpoint_id")
+  parentCheckpointId   String?  @map("parent_checkpoint_id")
+  checkpoint           Json     @map("checkpoint")
+  metadata             Json     @map("metadata")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  @@id([threadId, checkpointNs, checkpointId])
+  @@map("checkpoints")
+}
+
+// ── CheckpointWrite ──────────────────────────────────────────────────
+model CheckpointWrite {
+  threadId     String   @map("thread_id")
+  checkpointNs String   @default("") @map("checkpoint_ns")
+  checkpointId String   @map("checkpoint_id")
+  taskId       String   @map("task_id")
+  idx          Int      @map("idx")
+  channel      String   @map("channel")
+  value        Json     @map("value")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@id([threadId, checkpointNs, checkpointId, taskId, idx])
+  @@map("checkpoint_writes")
+}
+
